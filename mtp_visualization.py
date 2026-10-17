@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import plotly.graph_objects as go
 
@@ -9,6 +11,23 @@ import mtp_constants as C
 from mtp_evaluation import Analysis
 
 EPS = 1e-30
+
+
+def _ref_line(fig, value, text, position, axis, log=True, **line_kwargs):
+    """Referenzlinie mit Beschriftung auf einer logarithmischen Achse: die Linie liegt auf dem Datenwert, die Beschriftung braucht log10 des Werts
+    (add_hline und add_vline setzen beide auf denselben Wert, die Beschriftung sitzt dann falsch und dehnt die Achse); log=False für lineare Achsen."""
+    if log and not value > 0.0:
+        return
+    pos = math.log10(value) if log else value
+    top, left = "top" in position, "left" in position
+    if axis == "y":
+        fig.add_hline(y=value, **line_kwargs)
+        if text:
+            fig.add_annotation(xref="paper", yref="y", x=0 if left else 1, y=pos, text=text, showarrow=False, xanchor="left" if left else "right", yanchor="bottom" if top else "top")
+    else:
+        fig.add_vline(x=value, **line_kwargs)
+        if text:
+            fig.add_annotation(xref="x", yref="paper", x=pos, y=1 if top else 0, text=text, showarrow=False, xanchor="right" if left else "left", yanchor="top" if top else "bottom")
 
 
 def _db(v):
@@ -66,7 +85,7 @@ def build_f_spectrum(a: Analysis) -> go.Figure:
     if a.f_stat is not None:
         fig.add_trace(go.Scatter(x=a.f_hz_f, y=np.maximum(a.f_stat, 1e-3), mode="lines", line=dict(color=C.COLOR_MT, width=1.5), name="F(f)",
                                  hovertemplate="%{x:.1f} Hz: F = %{y:.1f}<extra></extra>"))
-        fig.add_hline(y=a.f_thr, line=dict(color=C.COLOR_LINE, width=1.5, dash="dash"), annotation_text="Schwelle")
+        _ref_line(fig, a.f_thr, "Schwelle", "top right", "y", line=dict(color=C.COLOR_LINE, width=1.5, dash="dash"))
         for pos in _line_positions(a):
             fig.add_vline(x=pos, line=dict(color=C.COLOR_LINE, width=1, dash="dot"))
     fig.update_xaxes(title_text="Frequenz (Hz)", range=[0, C.FS / 2])
