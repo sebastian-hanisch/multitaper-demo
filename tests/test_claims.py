@@ -69,6 +69,102 @@ def test_first_screen_claims_about_the_tapers():
         assert 0.65 < lam[2 * nw - 1] < 0.75
 
 
+@pytest.mark.parametrize("nw", [8, 10, 12])
+def test_taper_concentration_for_large_nw_is_at_least_ninety_percent_but_not_ninety_two(nw):
+    """App: mindestens 90 % (für NW bis 6 mindestens 92 %); der Regler bietet NW bis 12."""
+    lam = T.concentration(T.dpss(1024, nw, 2 * nw), nw)
+    assert lam[:2 * nw - 1].min() > 0.90 and lam[:2 * nw - 1].min() < 0.92 and lam[0] > 0.9999
+
+
+def test_mean_energy_outside_the_band_of_the_first_seven_tapers_is_about_one_percent():
+    """App-Einleitung: bei den ersten 2NW - 1 Tapern liegt im Mittel rund 1 % der Energie außerhalb des Bandes (NW = 4, n = 1024)."""
+    lam = T.concentration(T.dpss(1024, 4, 7), 4)
+    assert float(np.mean(1.0 - lam)) == pytest.approx(0.0102, abs=0.001)
+
+
+def _noise_bandwidth_bins(n, nw, k):
+    """(Integral der Fensterantwort)^2 / Integral des Quadrats, in Bins f_s / n, für gleich gewichtete Taper."""
+    h = T.dpss(n, nw, k)
+    c = sum(np.correlate(hk, hk, "full") for hk in h) / k
+    return float(n * c[n - 1] ** 2 / (c ** 2).sum())
+
+
+def test_noise_bandwidth_is_two_nw_bins_only_for_k_near_two_nw_minus_one():
+    """App-Kachel Rauschbandbreite: näherungsweise 2·NW Bins bei K = 2NW - 1 bis 2NW, sonst schmaler (NW = 4: K = 1: 2,85; 4: 5,85; 7: 7,81; 8: 8,66; NW = 2, K = 3: 3,70)."""
+    got = [_noise_bandwidth_bins(1024, 4, k) for k in (1, 4, 7, 8)]
+    assert got == pytest.approx([2.85, 5.85, 7.81, 8.66], abs=0.02)
+    assert _noise_bandwidth_bins(1024, 2, 3) == pytest.approx(3.70, abs=0.02)
+    assert got[0] < 0.4 * 8.0 and 0.95 * 8.0 < got[2] < 8.0 < got[3]
+
+
+def test_welch_on_a_finer_segment_grid_removes_most_of_the_advantage_of_the_multitaper():
+    """README: Welch in Schritten von 16 Messwerten (n = 1024) 1,14 dB gleichauf mit dem Multitaper 1,14 dB; n = 128 (Schritt 4): 2,70 gegen 2,57 dB, rund 5 %."""
+    import signal_generator as G
+    import mtp_welch as H
+
+    def welch_fine(n, step):
+        poles, ar_sigma, white = ev.noise_spec("Resonanz")
+        x = G.make_noise_batch(C.EXP_BEST_RUNS, n, poles, ar_sigma, white, G.SplitMix64(C.SWEEP_SEED + 1))
+        f = np.arange(n // 2 + 1) * C.FS / n
+        true = G.true_psd(f, C.FS, poles, ar_sigma, white)
+        sl = slice(4, n // 2 - 4)
+
+        def rmse(est):
+            e = ev.DB * np.log(est[:, sl] / true[sl])
+            return float(math.sqrt((e ** 2).mean()))
+        return min(rmse(H.welch(x, seg, H.hop_for(seg, 0.5), H.window("Hann", seg), C.FS, n)[0][:, :n // 2 + 1]) for seg in range(16, n // 2 + 1, step))
+
+    best = get("best_vs_best")
+    r1024, r128 = row(best, n=1024, background="Resonanz"), row(best, n=128, background="Resonanz")
+    fine1024, fine128 = welch_fine(1024, 16), welch_fine(128, 4)
+    assert fine1024 == pytest.approx(1.14, abs=0.01) and fine1024 == pytest.approx(r1024["equal"], abs=0.02)
+    assert fine128 == pytest.approx(2.70, abs=0.02) and (fine128 - r128["equal"]) / fine128 == pytest.approx(0.049, abs=0.01)
+    assert (r128["welch"] - r128["equal"]) / r128["welch"] == pytest.approx(0.091, abs=0.01)
+
+
+def test_steep_background_with_fewer_tapers_the_multitaper_matches_welch():
+    """README: Steil mit weniger Tapern (K = 13 bei NW = 8) 1,49 dB gegen Welch 1,47 dB; die 2,32 dB folgen aus K = 2NW - 1."""
+    import signal_generator as G
+    n = 1024
+    poles, ar_sigma, white = ev.noise_spec("Steil")
+    x = G.make_noise_batch(C.EXP_BEST_RUNS, n, poles, ar_sigma, white, G.SplitMix64(C.SWEEP_SEED + 1))
+    f = np.arange(n // 2 + 1) * C.FS / n
+    true = G.true_psd(f, C.FS, poles, ar_sigma, white)
+    sl = slice(4, n // 2 - 4)
+    e = ev.DB * np.log(S.multitaper_equal(x, T.dpss(n, 8, 13), C.FS, n)[:, :n // 2 + 1][:, sl] / true[sl])
+    rm = float(math.sqrt((e ** 2).mean()))
+    welch = row(get("best_vs_best"), n=1024, background="Steil")
+    assert rm == pytest.approx(1.49, abs=0.02) and rm == pytest.approx(welch["welch"], abs=0.05) and rm < 0.7 * welch["equal"]
+
+
+def test_f_test_false_alarm_is_not_valid_for_two_sharp_resonances():
+    """README/App: in 'Zwei scharfe Resonanzen' (Pole 0,998) rund 22 % statt 1 %; Verteilungsfunktion weicht an den Resonanzen um mehr als 0,5 von F(2, 2K - 2) ab;
+    in 'Resonanz' und 'Steil' 0,05 bis 0,25 an den Gipfeln, gepoolter Falschalarm unter dem Nennwert."""
+    import signal_generator as G
+    n, nw, k, runs = 1024, 4, 7, 2000
+    h = T.dpss(n, nw, k)
+    nfft = C.PADF * n
+    thr = S.f_threshold(k, C.ALPHA / (nfft // 2))
+
+    def run(bg):
+        poles, ar_sigma, white = ev.noise_spec(bg)
+        xs = G.make_noise_batch(runs, n, poles, ar_sigma, white, G.SplitMix64(C.SWEEP_SEED + 4))
+        return S.f_statistic(xs, h, nfft)
+
+    def ks(F, frac):
+        from scipy import stats
+        return float(stats.kstest(F[:, int(round(frac * nfft))], stats.f(2, 2 * k - 2).cdf).statistic)
+
+    sharp = run("Zwei scharfe Resonanzen")
+    assert float((sharp[:, C.F_GUARD:-C.F_GUARD].max(axis=1) > thr).mean()) == pytest.approx(0.22, abs=0.04)
+    assert ks(sharp, 0.1) > 0.5 and ks(sharp, 0.3) > 0.5
+    for bg in ("Resonanz", "Steil"):
+        F = run(bg)
+        assert float((F[:, C.F_GUARD:-C.F_GUARD].max(axis=1) > thr).mean()) < 0.01
+    assert 0.03 < ks(run("Resonanz"), 0.2) < 0.12
+    assert 0.15 < ks(run("Steil"), 0.2) < 0.30
+
+
 def test_orthogonal_tapers_give_k_independent_means_but_welch_gets_more_at_equal_bandwidth():
     rows = get("equal_bandwidth")
     for r in rows:

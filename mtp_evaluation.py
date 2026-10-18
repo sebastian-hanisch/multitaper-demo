@@ -444,7 +444,7 @@ def verdict_resolution(rows: list[dict]) -> tuple[str, str]:
     first = next((d for d, v in zip(mt["deltas"], mt["shares"]) if v >= 0.95), None)
     text = (f"Beim Multitaper mit NW = 4 sind zwei gleich starke Linien ab {de(first, 0)} Bins Abstand in mindestens 95 % der Läufe getrennt (Rauschbandbreite 8 Bins)."
             if first is not None else "Beim Multitaper mit NW = 4 sind zwei Linien im untersuchten Bereich nicht sicher getrennt.")
-    return "info", text + " **Die Auflösung ist die Bandbreite: ab 2 NW Bins.**"
+    return "info", text + " **Die Auflösung folgt der Bandbreite: ab 2 NW Bins (gemessen für NW bis 4).**"
 
 
 def verdict_line_test(res: dict) -> tuple[str, str]:
@@ -452,4 +452,4 @@ def verdict_line_test(res: dict) -> tuple[str, str]:
     det = [d for d in res["detect"] if d["snr"] == -10][0]
     return "success", (f"Falschalarm je Aufzeichnung bei Resonanz-Hintergrund: F-Test {de(100 * fa['Resonanz']['f'], 1)} %, Fisher-g {de(100 * fa['Resonanz']['g'], 0)} % (nominal "
                        f"{de(100 * res['alpha'], 0)} %). Bei −10 dB je Abtastwert findet der F-Test die Linie in {de(100 * det['f'], 0)} % der Läufe, Fisher-g (nur weißes Rauschen) "
-                       f"in {de(100 * det['g'], 0)} %: **gültiger Falschalarm kostet etwa 4 dB Empfindlichkeit.**")
+                       f"in {de(100 * det['g'], 0)} %: **gegenüber Fishers g im weißen Rauschen kostet der F-Test in dieser Einstellung etwa 4 dB Empfindlichkeit.**")

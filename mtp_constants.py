@@ -73,5 +73,5 @@ PRESET_HELP = {
     "Steiler Hintergrund": "57 dB Spannweite, gleiche Gewichte: Das Tal liegt um 3,2 dB zu hoch. Auf „adaptiv“ stellen: Die Gewichte holen es auf die wahre Dichte.",
     "Zwei Linien an der Bandgrenze": "Zwei gleich starke Linien genau 2NW = 8 Bins auseinander: Das Multitaper trennt sie gerade, Welch bei gleicher Bandbreite nicht; mit NW = 5 oder 6 verschmelzen sie.",
     "Linie im gefärbten Rauschen": "Eine Linie bei −8 dB je Abtastwert auf einem Hintergrund mit Resonanz: Der F-Test findet sie bei gültigem Falschalarm, der Fisher-g-Test schlägt wegen des gefärbten Hintergrunds überall an.",
-    "Kurze Aufzeichnung": "Nur 128 Messwerte, 5 Taper mit NW = 3: Welch muss die Segmente auf 32 Messwerte kürzen, das Multitaper behält die Länge 128; der Gesamtfehler ist trotzdem nur etwa 9 % kleiner (Beste-gegen-beste-Tabelle).",
+    "Kurze Aufzeichnung": "Nur 128 Messwerte, 5 Taper mit NW = 3: Welch muss die Segmente bei gleicher Bandbreite auf 32 Messwerte kürzen, das Multitaper behält die Länge 128; der Gesamtfehler ist trotzdem nur etwa 3 bis 9 % kleiner (je nach Welch-Raster; Beste-gegen-beste-Tabelle).",
 }

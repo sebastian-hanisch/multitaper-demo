@@ -52,8 +52,8 @@ st.title("🎚️ Multitaper: orthogonale Fenster auf der ganzen Aufzeichnung")
 st.markdown(
     """
 Welch schneidet die Aufzeichnung in Segmente und mittelt ihre Spektren. Das **Multitaper** lässt die Aufzeichnung ganz und legt **K orthogonale Fenster** (Slepian-Taper) darüber: Jedes
-Taper liefert ein **Eigenspektrum**, ihr Mittel ist der Schätzer. Die Taper sind so gebaut, dass fast keine Energie außerhalb des Bandes der Breite 2·NW/n liegt; die K Eigenspektren
-sind bei weißem Rauschen **unabhängig**. Dazu gibt es einen **Linientest** (harmonischer F-Test), dessen Falschalarm auch bei gefärbtem Hintergrund stimmt.
+Taper liefert ein **Eigenspektrum**, ihr Mittel ist der Schätzer. Die Taper sind so gebaut, dass bei den ersten 2NW − 1 im Mittel rund 1 % der Energie außerhalb des Bandes der Breite 2·NW/n liegt (beim ersten fast nichts); die K Eigenspektren
+sind bei weißem Rauschen **unabhängig**. Dazu gibt es einen **Linientest** (harmonischer F-Test), dessen Falschalarm bei glatt gefärbtem Hintergrund eingehalten wird; bei Resonanzen, die schmaler sind als das Taperband, nicht.
 
 Dies ist die vierte Demo der Reihe „Spektral- und Wavelet-Analyse“, auf **Periodogramm**, **Fenstern** und **Bartlett/Welch** aufbauend; mit „Multi-…“-Demos anderer Reihen hat sie nichts zu tun.
 Alles ist **simuliert**: Hintergrund, Linien und die wahre Dichte sind bekannt. Weiter unten: **🔬 Experimente**, **🚧 Wo die Annahmen enden** und **📐 Mathematische Formulierung**.
@@ -63,11 +63,11 @@ Alles ist **simuliert**: Hintergrund, Linien und die wahre Dichte sind bekannt. 
 with st.expander("So funktioniert das Multitaper", expanded=True):
     st.markdown(
         """
-1. **Taper:** NW legt die halbe Bandbreite W = NW/n fest. Die ersten 2NW − 1 Taper haben mindestens 92 % ihrer Energie in [−W, W] (das erste mehr als 99,99 %); Taper Nr. 2NW hat nur noch etwa 70 %.
+1. **Taper:** NW legt die halbe Bandbreite W = NW/n fest. Die ersten 2NW − 1 Taper haben mindestens 90 % ihrer Energie in [−W, W] (für NW bis 6 mindestens 92 %; das erste mehr als 99,99 %); Taper Nr. 2NW hat nur noch etwa 70 %.
 2. **Eigenspektren:** Jedes Taper wird mit der ganzen Aufzeichnung multipliziert und per FFT transformiert; der Schätzer ist das Mittel der Betragsquadrate.
 3. **Streuung:** Orthogonale Taper machen die Eigenspektren bei weißem Rauschen unabhängig: Die Streuung sinkt mit 1/√K, Überlappung gibt es nicht.
 4. **Gewichte:** Die höheren Taper lassen mehr Energie von außerhalb ein. **Adaptive Gewichte** (Thomson) dämpfen sie, wo das Spektrum steil ist.
-5. **F-Test:** Alle Taper sehen eine Linie mit demselben Vorzeichenmuster ihrer Summe. Das Verhältnis aus diesem Anteil und dem Rest ist F-verteilt – eine Schwelle mit gültigem Falschalarm.
+5. **F-Test:** Alle Taper sehen eine Linie mit demselben Vorzeichenmuster ihrer Summe. Das Verhältnis aus diesem Anteil und dem Rest ist F-verteilt – eine Schwelle mit gültigem Falschalarm, solange das Spektrum im Taperband glatt ist.
         """
     )
 
@@ -109,7 +109,7 @@ with st.sidebar:
         line, snr = float(st.session_state["line_kept"]), int(st.session_state["snr_kept"])
     if lines == "zwei":
         gap = st.slider("Abstand der Linie 2 (Bins von f_s/n)", C.GAP_MIN, C.GAP_MAX, float(st.session_state["gap_kept"]), step=C.GAP_STEP,
-                        help="Abstand der zweiten Linie in Vielfachen von f_s/n. Die Bandbreite des Multitapers ist 2·NW Bins.")
+                        help="Abstand der zweiten Linie in Vielfachen von f_s/n. Die Bandbreite des Multitapers ist rund 2·NW Bins (bei K = 2NW − 1).")
         st.session_state["gap_kept"] = float(gap)
         rel = st.slider("Linie 2 gegen Linie 1 (dB)", C.REL_MIN, C.REL_MAX, int(st.session_state["rel_kept"]), help="0 dB: gleich stark.")
         st.session_state["rel_kept"] = int(rel)
@@ -131,11 +131,11 @@ st.markdown("## 🎯 Ergebnis")
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Unabhängige Mittel", f"{a.k}", delta=f"Welch bei gleicher Bandbreite: {de(a.welch_k_eff, 1)}", delta_color="off")
 m2.metric("Streuung je Frequenz", f"±{de(a.std_db, 1)} dB", delta=f"Welch ±{de(a.welch_std_db, 1)} dB, ein Periodogramm ±{de(a.full_std_db, 1)} dB", delta_color="off")
-m3.metric("Rauschbandbreite", f"{de(a.bandwidth_hz, 1)} Hz", delta=f"= 2·NW = {2 * int(nw)} Bins von f_s/n", delta_color="off")
+m3.metric("Rauschbandbreite", f"{de(a.bandwidth_hz, 1)} Hz", delta=f"≈ 2·NW = {2 * int(nw)} Bins von f_s/n (K = 2NW − 1 bis 2NW; bei weniger Tapern schmaler)", delta_color="off")
 m4.metric("Rechenaufwand", f"{a.ops:,}".replace(",", "."), delta=f"{de(a.ops / a.ops_welch, 1)}-fach Welch, {de(a.ops / a.ops_full, 1)}-fach ein Periodogramm", delta_color="off",
           help="Komplexe Multiplikationen der K FFTs der Länge n (Radix 2).")
 st.plotly_chart(build_spectrum(a, zoom=False), width="stretch", key="spectrum_full")
-st.caption("Grau: Welch (Hann, 50 % Überlappung) mit der Segmentlänge, die dieselbe Rauschbandbreite ergibt. Blau: Multitaper. Orange: exakter Erwartungswert des Multitapers "
+st.caption("Grau: Welch (Hann, 50 % Überlappung) mit der Segmentlänge, die dieselbe Rauschbandbreite ergibt (bei K < 2NW − 1 ist das Multitaper schmaler, der Vergleich dann nicht bei gleicher Bandbreite). Blau: Multitaper. Orange: exakter Erwartungswert des Multitapers "
            "(nur bei gleichen Gewichten), grün gepunktet: wahre Dichte, rot gestrichelt: wahre Lage der Linien.")
 if lines != "keine":
     st.plotly_chart(build_spectrum(a, zoom=True), width="stretch", key="spectrum_zoom")
@@ -216,15 +216,16 @@ getattr(st, kind)(text)
 st.markdown("#### Wie dicht dürfen zwei Linien liegen?")
 res = _experiment("resolution")
 st.caption(f"Zwei gleich starke Linien (10 dB je Linie) in weißem Rauschen, {C.EXP_RES_RUNS} Läufe; aufgelöst heißt zwei Maxima mit einem Einbruch von mindestens 3 dB dazwischen. "
-           "Die Rauschbandbreite ist beim Multitaper 2·NW Bins, bei Welch mit Hann 1,5·n/L Bins.")
+           "Die Rauschbandbreite ist beim Multitaper (K = 2NW − 1) rund 2·NW Bins, bei Welch mit Hann 1,5·n/L Bins.")
 st.plotly_chart(build_resolution(res), width="stretch", key="exp_resolution")
 kind, text = ev.verdict_resolution(res)
 getattr(st, kind)(text)
 
-st.markdown("#### Linientest mit gültigem Falschalarm")
+st.markdown("#### Linientest mit Falschalarm-Schwelle")
 lt = _experiment("line_test")
 st.caption(f"Eine Linie zwischen zwei Bins, n = {C.EXP_N}, NW = {lt['nw']:g}, K = {lt['k']}, {lt['runs']} Läufe; Schwellen für {de(100 * lt['alpha'], 0)} % Falschalarm je Aufzeichnung "
-           f"(F > {de(lt['f_thr'], 1)}, g > {de(lt['g_thr'], 4)}).")
+           f"(F > {de(lt['f_thr'], 1)}, g > {de(lt['g_thr'], 4)}). Der ebenfalls wählbare Hintergrund „Zwei scharfe Resonanzen“ (Pole 0,998) fehlt hier: "
+           "Dort liegt der Falschalarm des F-Tests bei rund 22 % statt 1 %, weil die Resonanzen schmaler sind als das Taperband.")
 st.dataframe(pd.DataFrame([{"Hintergrund": r["background"], "Falschalarm F-Test": de(100 * r["f"], 1) + " %", "Falschalarm Fisher-g": de(100 * r["g"], 1) + " %"}
                            for r in lt["false_alarm"]]), hide_index=True, width="stretch")
 st.plotly_chart(build_line_test(lt), width="stretch", key="exp_line_test")
@@ -241,6 +242,7 @@ st.markdown(
 | Annahme | Was passiert, wenn sie verletzt ist | Wer setzt an |
 |---|---|---|
 | **K ≈ 2NW − 1 Taper** | Mehr Taper lassen Energie von außerhalb ein (Leckage); weniger streuen stärker. | – |
+| **Glattes Spektrum im Taperband** (F-Test) | Bei Resonanzen, die schmaler sind als das Band (Hintergrund „Zwei scharfe Resonanzen“), liegt der Falschalarm bei rund 22 % statt 1 %. | Konfidenz und Falschalarm |
 | **Eine Linie im Band** (F-Test) | Zwei Linien im selben Band lassen F klein werden; der Test sieht sie nur einzeln. | Unterraumverfahren |
 | **Linie nicht am Rand** | Nahe 0 und der Nyquist-Frequenz ist die Spiegelung nicht zu trennen; die ersten und letzten Bins zählen nicht. | – |
 | **Stationär** | Ändert sich das Spektrum, mittelt das Multitaper darüber hinweg. | Spektrogramm |
